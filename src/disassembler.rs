@@ -250,7 +250,7 @@ impl OpComponents {
             (0b10, RegType::HL) => "HL-",
             (0b11, RegType::HL) => "HL+",
             (0b10, RegType::SP) => "HL",
-            (0b10, RegType::SP) => "SP",
+            (0b11, RegType::SP) => "SP",
             _ => "NOT VALID REGISTER",
         }
     }
