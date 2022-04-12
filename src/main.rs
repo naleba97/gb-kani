@@ -6,7 +6,7 @@ mod disassembler;
 mod cpu;
 mod mem;
 
-use disass::Disassembler;
+use disassembler::Disassembler;
 
 #[derive(Parser, Debug)]
 struct Args {
