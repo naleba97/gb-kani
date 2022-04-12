@@ -37,10 +37,10 @@ enum Register16Bit {
 }
 
 impl RegFile {
-    pub fn load_8bit_reg(&mut self, reg: Register8Bit, val: u8) {
+    pub fn store_8bit_reg(&mut self, reg: Register8Bit, val: u8) {
         match reg {
             Register8Bit::A => self.a = val,
-            Register8Bit::F => self.f.load_flags(val),
+            Register8Bit::F => self.f.store_flags(val),
             Register8Bit::B => self.b = val,
             Register8Bit::C => self.c = val,
             Register8Bit::D => self.d = val,
@@ -48,14 +48,27 @@ impl RegFile {
             Register8Bit::H => self.h = val,
             Register8Bit::L => self.l = val,
         }
-
     }
+
+    pub fn load_8bit_reg(&mut self, reg: Register8Bit) -> u8 {
+        match reg {
+            Register8Bit::A => self.a,
+            Register8Bit::F => self.f.load_flags(),
+            Register8Bit::B => self.b,
+            Register8Bit::C => self.c,
+            Register8Bit::D => self.d,
+            Register8Bit::E => self.e,
+            Register8Bit::H => self.h,
+            Register8Bit::L => self.l,
+        }
+    }
+
 
     pub fn load_16bit_reg(&mut self, reg: Register16Bit, val: u16) {
         match reg {
             Register16Bit::AF => {
                 self.a = (val & 0xFF00) as u8;
-                self.f.load_flags((val & 0x00FF) as u8);
+                self.f.store_flags((val & 0x00FF) as u8);
             },
             Register16Bit::BC => {
                 self.b = (val & 0xFF00) as u8;
@@ -84,8 +97,12 @@ struct Flags {
 }
 
 impl Flags {
-    pub fn load_flags(&mut self, val: u8) {
+    pub fn store_flags(&mut self, val: u8) {
         self.f = val;
+    }
+
+    pub fn load_flags(&mut self) -> u8 {
+        self.f
     }
 
     /// Set the zero flag.
