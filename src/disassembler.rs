@@ -270,7 +270,7 @@ impl OpComponents {
     }
 
     fn process_prefix(byte: &u8) -> &str {
-        "PREFIX" 
+        return "PREFIX" 
     }
 
     // fn is_load(&self, byte: &u8) -> Operation {
