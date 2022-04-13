@@ -44,7 +44,7 @@ pub enum Opcode{
     SET
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 struct Operand{
    register_8bit: Option<Register8Bit>,
    register_16bit: Option<Register16Bit>,
@@ -59,14 +59,27 @@ struct Operand{
 impl Operand{
     pub fn new() -> Self{
         Operand{
-            register_8bit: Some(Register8Bit::A),
-            register_16bit: Some(Register16Bit::AF),
-            data_8bit: Some(0x0),
-            data_16bit: Some(0x0),
-            addr_8bit: Some(0x0),
-            addr_16bit: Some(0x0),
-            pc_relative_8bit: Some(0x0),
-            condition_code: Some(ConditionCode::N),
+            register_8bit: None,
+            register_16bit: None,
+            data_8bit: None,
+            data_16bit: None,
+            addr_8bit: None,
+            addr_16bit: None,
+            pc_relative_8bit: None,
+            condition_code: None,
+        }
+    }
+    pub fn get_valid_field(self) -> String{
+        match (&self.register_8bit, &self.register_16bit, &self.data_8bit, &self.data_16bit, &self.addr_8bit, &self.addr_16bit, &self.pc_relative_8bit, &self.condition_code){
+            (Some(Register8Bit), ..) => format!("{:?}", self.register_8bit.unwrap()), 
+            (_, Some(Register16Bit), ..) => format!("{:?}", self.register_16bit.unwrap()), 
+            (_,_, Some(u8), ..) => format!("{:?}", self.data_8bit.unwrap()),
+            (_,_,_, Some(u8), ..) => format!("{:?}", self.data_16bit.unwrap()),
+            (_,_,_,_, Some(u16), ..) => format!("{:?}", self.addr_8bit.unwrap()),
+            (_,_,_,_,_, Some(u16), ..) => format!("{:?}", self.addr_16bit.unwrap()),
+            (_,_,_,_,_,_,Some(i8), _) => format!("{:?}", self.pc_relative_8bit.unwrap()),
+            (.., Some(ConditionCode)) => format!("{:?}", self.condition_code.unwrap()),
+            _ => format!(""),
         }
     }
 }
@@ -81,15 +94,7 @@ pub struct Instruction {
 
 impl fmt::Display for Operand{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?}", //TODO: comma?
-        self.register_8bit.as_ref().unwrap(),
-        self.register_16bit.as_ref().unwrap(),
-        self.data_8bit.as_ref().unwrap(),
-        self.data_16bit.as_ref().unwrap(),
-        self.addr_8bit.as_ref().unwrap(),
-        self.addr_16bit.as_ref().unwrap(),
-        self.pc_relative_8bit.as_ref().unwrap(),
-        self.condition_code.as_ref().unwrap(),)
+        write!(f, "{}", self.get_valid_field())
     }
 }
 
@@ -98,25 +103,26 @@ impl Default for Opcode {
 }
 
 impl Instruction{
-    pub fn new() -> Self{
-        let operand1 = Operand::new();
-        let operand2 = Operand::new();
-        Instruction{
-            binary_value: 0x00,
+    pub fn new(byte: u8, opcode: Opcode) -> Self{
+        let op = Operand::new();
+        Instruction{ 
+            binary_value: 0x00, 
             opcode: Opcode::LD,
-            operand1: Some(operand1),
-            operand2: Some(operand2),
+            operand1: Some(op),
+            operand2: None,
         }
     }
 }
 
 impl fmt::Display for Instruction{
-
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Binary value: {:0X?}\n{:?}\n{:?}\n{:?}\n", 
-        self.binary_value,
-        self.opcode,
-        self.operand1.as_ref().unwrap(),
-        self.operand2.as_ref().unwrap())
+        let mut instruction_to_print = String::new();
+        instruction_to_print.push_str(&format!("{:#04X?} : {:?}", self.binary_value, self.opcode));
+        match (&self.operand1, &self.operand2) {
+            (None, None) => (),
+            (Some(Operand), _) => instruction_to_print.push_str(&format!(" {}", self.operand1.as_ref().unwrap())),
+            (_, Some(Operand)) => instruction_to_print.push_str(&format!(", {}", self.operand2.as_ref().unwrap())),
+        }
+        write!(f, "{}", instruction_to_print)
     }
 }

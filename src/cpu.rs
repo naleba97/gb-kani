@@ -16,7 +16,7 @@ struct RegFile {
     pc: u16,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum Register8Bit {
     A,
     F,
@@ -27,7 +27,7 @@ pub enum Register8Bit {
     H,
     L,
 }
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum Register16Bit {
     AF,
     BC,
@@ -36,7 +36,7 @@ pub enum Register16Bit {
     SP,
     PC,
 }
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum ConditionCode{
     Z,
     N,
