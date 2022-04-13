@@ -1,4 +1,12 @@
 use std::fmt::{Display, Write};
+use std::cmp::Ordering;
+
+use crate::instruction::Instruction;
+use crate::instruction::Opcode;
+use crate::instruction::Operand;
+
+use crate::cpu::Register8Bit;
+use crate::cpu::Register16Bit;
 
 pub struct Disassembler {
     rom: Vec<u8>,
@@ -15,207 +23,236 @@ impl Disassembler {
         let mut prefix_operand_to_process = false;
         let mut asm_to_print = String::new();
         let mut immediate_value: u16 = 0;
-        for byte in &self.rom {
+        let mut process_3_bytes = true;
+        let mut num_bytes = self.rom.len();
+        let mut instruction = Instruction::new(0x00, Opcode::NOP);
+        let op1 = Operand::new();
+        let op2 = Operand::new();
+        for (byte_num, byte) in self.rom.iter().enumerate() {
             let components = OpComponents::from_byte(byte);
-            // write!(writer, "{:#04X?}\n", byte)?
-            if multiple_operands_to_process > 0 {
-                if multiple_operands_to_process == 2 {
-                    immediate_value += u16::from(*byte);
-                } else if multiple_operands_to_process == 1 {
-                    immediate_value += u16::from(*byte) << 8;
-                    asm_to_print.push_str(&format!(" ${:#06X?}", immediate_value));
-                    immediate_value = 0;
-                    write!(writer, "{}\n", asm_to_print)?;
-                    asm_to_print = String::from("");
-                }
-                multiple_operands_to_process -= 1;
-            } else if single_operand_to_process {
-                immediate_value += u16::from(*byte);
-                asm_to_print.push_str(&format!(" ${:#04X?}", immediate_value));
-                immediate_value = 0;
-                write!(writer, "{}\n", asm_to_print)?;
-                asm_to_print = String::from("");
-                single_operand_to_process = false;
-            } else if prefix_operand_to_process {
-                write!(writer, "{:#04X?} {} \n", byte, OpComponents::process_prefix(&byte))?;
-                prefix_operand_to_process = false;
-            } else {
+            let byte = *byte;
+            // match (byte_num + 3 < num_bytes) { 
                 match components.t {
-                    0b00 => match components.x {
-                        //MISC
-                        0b000 | 0b010 | 0b100 | 0b110 => match components.y {
-                            0b001 => {
-                                asm_to_print = format!(
-                                    "{:#04X?} : LD {},",
-                                    byte,
-                                    OpComponents::convert_byte_to_16bit_reg_name(
-                                        &components.z,
-                                        RegType::SP
-                                    )
-                                );
-                                multiple_operands_to_process = 2;
-                            }
-                            0b010 => {
-                                //special loads HL-/HL+
-                                write!(
-                                    writer,
-                                    "{:#04X?} : LD ({}), A\n",
-                                    byte,
-                                    OpComponents::convert_byte_to_16bit_reg_name(
-                                        &components.z,
-                                        RegType::HL)
-                                    )?
-                                
-                            }
-                            0b110 => {
-                                //merge?
-                                asm_to_print = format!(
-                                    "{:#04X?} : LD {},",
-                                    byte,
-                                    OpComponents::convert_byte_to_8bit_reg_name(&components.x)
-                                );
-                                single_operand_to_process = true;
-                            }
-                            _ => (),
-                        },
-                        0b001 | 0b011 | 0b101 | 0b111 =>
-                        //same as above, how merge?
-                        {
-                            match components.y {
-                                0b110 => {
-                                    asm_to_print = format!(
-                                        "{:#04X?} : LD {},",
-                                        byte,
-                                        OpComponents::convert_byte_to_8bit_reg_name(&components.x)
-                                    );
-                                    single_operand_to_process = true;
-                                }
-                                _ => (),
-                            }
-                        }
-                        _ => (),
-                    },
+                    0b00 => (),
                     0b01 => {
-                        //LDs and HALT
-                        if components.x == 6 && components.y == 6 {
-                            //HALT
-                            write!(writer, "{:#04X?} : HALT\n", byte)?
-                        } else {
-                            write!(
-                                writer,
-                                "{:#04X?} : LD {}, {} \n",
-                                byte,
-                                OpComponents::convert_byte_to_8bit_reg_name(&components.x),
-                                OpComponents::convert_byte_to_8bit_reg_name(&components.y)
-                            )?
+                        if components.x == 6 && components.y == 6 { 
+                            instruction = Instruction::new(byte, Opcode::HALT);
                         }
-                    }
-                    0b10 => {
-                        //Arithmetic, merge into more variable lol
-                        match components.x {
-                            0b000 => {
-                                match components.y {
-                                    0b0000..=0b0111 => {
-                                        //Adds
-                                        write!(
-                                            writer,
-                                            "{:#04X?} : ADD A, {} \n",
-                                            byte,
-                                            OpComponents::convert_byte_to_8bit_reg_name(
-                                                &components.y
-                                            )
-                                        )?
-                                    }
-                                    _ => (),
-                                }
-                            }
-                            0b001 => {
-                                //TODO same as above minus ADC
-                                match components.y {
-                                    0b0000..=0b0111 => {
-                                        //Adds
-                                        write!(
-                                            writer,
-                                            "{:#04X?} : ADC A, {} \n",
-                                            byte,
-                                            OpComponents::convert_byte_to_8bit_reg_name(
-                                                &components.y
-                                            )
-                                        )?
-                                    }
-                                    _ => (),
-                                }
-                            }
-                            0b010 => match components.y {
-                                0b0000..=0b0111 => write!(
-                                    writer,
-                                    "{:#04X?} : SUB {} \n",
-                                    byte,
-                                    OpComponents::convert_byte_to_8bit_reg_name(&components.y)
-                                )?,
-                                _ => (),
-                            },
-                            0b011 => match components.y {
-                                0b0000..=0b0111 => write!(
-                                    writer,
-                                    "{:#04X?} : SUB A, {} \n",
-                                    byte,
-                                    OpComponents::convert_byte_to_8bit_reg_name(&components.y)
-                                )?,
-                                _ => (),
-                            },
-                            0b100 => match components.y {
-                                0b0000..=0b0111 => write!(
-                                    writer,
-                                    "{:#04X?} : AND {} \n",
-                                    byte,
-                                    OpComponents::convert_byte_to_8bit_reg_name(&components.y)
-                                )?,
-                                _ => (),
-                            },
-                            0b101 => match components.y {
-                                0b0000..=0b0111 => write!(
-                                    writer,
-                                    "{:#04X?} : XOR {} \n",
-                                    byte,
-                                    OpComponents::convert_byte_to_8bit_reg_name(&components.y)
-                                )?,
-                                _ => (),
-                            },
-                            0b110 => match components.y {
-                                0b0000..=0b0111 => write!(
-                                    writer,
-                                    "{:#04X?} : OR {} \n",
-                                    byte,
-                                    OpComponents::convert_byte_to_8bit_reg_name(&components.y)
-                                )?,
-                                _ => (),
-                            },
-                            0b111 => match components.y {
-                                0b0000..=0b0111 => write!(
-                                    writer,
-                                    "{:#04X?} : CP {} \n",
-                                    byte,
-                                    OpComponents::convert_byte_to_8bit_reg_name(&components.y)
-                                )?,
-                                _ => (),
-                            },
-                            _ => (),
+                        else { 
+                            instruction = Instruction::new(byte, Opcode::LD)
+                            .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)))
+                            .add_operand(2, op2.add_reg_8bit(get_8bit_reg_name(&components.y)));
                         }
-                    }
-                    0b11 => match components.x {
-                        0b001 => match components.y {
-                            0b011 => { //PREFIX
-                                prefix_operand_to_process = true;
-                            }
-                            _ => (),
-                        }
-                        _ => (),
-                    }
-                    _ => (), //write!(writer, "{:#04X?}, ", byte)?,
+                    },
+                    0b10 => (),
+                    0b11 => (),
+                    _ => (),
+                }
+                if(instruction.binary_value != 0x00){
+                    write!(writer, "{}\n", instruction);
+                    instruction = Instruction::new(0x00, Opcode::NOP);
                 }
             }
-        }
+        //     let components = OpComponents::from_byte(byte);
+        //     // write!(writer, "{:#04X?}\n", byte)?
+        //     if multiple_operands_to_process > 0 {
+        //         if multiple_operands_to_process == 2 {
+        //             immediate_value += u16::from(*byte);
+        //         } else if multiple_operands_to_process == 1 {
+        //             immediate_value += u16::from(*byte) << 8;
+        //             asm_to_print.push_str(&format!(" ${:#06X?}", immediate_value));
+        //             immediate_value = 0;
+        //             write!(writer, "{}\n", asm_to_print)?;
+        //             asm_to_print = String::from("");
+        //         }
+        //         multiple_operands_to_process -= 1;
+        //     } else if single_operand_to_process {
+        //         immediate_value += u16::from(*byte);
+        //         asm_to_print.push_str(&format!(" ${:#04X?}", immediate_value));
+        //         immediate_value = 0;
+        //         write!(writer, "{}\n", asm_to_print)?;
+        //         asm_to_print = String::from("");
+        //         single_operand_to_process = false;
+        //     } else if prefix_operand_to_process {
+        //         write!(writer, "{:#04X?} {} \n", byte, OpComponents::process_prefix(&byte))?;
+        //         prefix_operand_to_process = false;
+        //     } else {
+        //         match components.t {
+        //             0b00 => match components.x {
+        //                 //MISC
+        //                 0b000 | 0b010 | 0b100 | 0b110 => match components.y {
+        //                     0b001 => {
+        //                         asm_to_print = format!(
+        //                             "{:#04X?} : LD {},",
+        //                             byte,
+        //                             OpComponents::convert_byte_to_16bit_reg_name(
+        //                                 &components.z,
+        //                                 RegType::SP
+        //                             )
+        //                         );
+        //                         multiple_operands_to_process = 2;
+        //                     }
+        //                     0b010 => {
+        //                         //special loads HL-/HL+
+        //                         write!(
+        //                             writer,
+        //                             "{:#04X?} : LD ({}), A\n",
+        //                             byte,
+        //                             OpComponents::convert_byte_to_16bit_reg_name(
+        //                                 &components.z,
+        //                                 RegType::HL)
+        //                             )?
+                                
+        //                     }
+        //                     0b110 => {
+        //                         //merge?
+        //                         asm_to_print = format!(
+        //                             "{:#04X?} : LD {},",
+        //                             byte,
+        //                             OpComponents::convert_byte_to_8bit_reg_name(&components.x)
+        //                         );
+        //                         single_operand_to_process = true;
+        //                     }
+        //                     _ => (),
+        //                 },
+        //                 0b001 | 0b011 | 0b101 | 0b111 =>
+        //                 //same as above, how merge?
+        //                 {
+        //                     match components.y {
+        //                         0b110 => {
+        //                             asm_to_print = format!(
+        //                                 "{:#04X?} : LD {},",
+        //                                 byte,
+        //                                 OpComponents::convert_byte_to_8bit_reg_name(&components.x)
+        //                             );
+        //                             single_operand_to_process = true;
+        //                         }
+        //                         _ => (),
+        //                     }
+        //                 }
+        //                 _ => (),
+        //             },
+        //             0b01 => {
+        //                 //LDs and HALT
+        //                 if components.x == 6 && components.y == 6 {
+        //                     //HALT
+        //                     write!(writer, "{:#04X?} : HALT\n", byte)?
+        //                 } else {
+        //                     write!(
+        //                         writer,
+        //                         "{:#04X?} : LD {}, {} \n",
+        //                         byte,
+        //                         OpComponents::convert_byte_to_8bit_reg_name(&components.x),
+        //                         OpComponents::convert_byte_to_8bit_reg_name(&components.y)
+        //                     )?
+        //                 }
+        //             }
+        //             0b10 => {
+        //                 //Arithmetic, merge into more variable lol
+        //                 match components.x {
+        //                     0b000 => {
+        //                         match components.y {
+        //                             0b0000..=0b0111 => {
+        //                                 //Adds
+        //                                 write!(
+        //                                     writer,
+        //                                     "{:#04X?} : ADD A, {} \n",
+        //                                     byte,
+        //                                     OpComponents::convert_byte_to_8bit_reg_name(
+        //                                         &components.y
+        //                                     )
+        //                                 )?
+        //                             }
+        //                             _ => (),
+        //                         }
+        //                     }
+        //                     0b001 => {
+        //                         //TODO same as above minus ADC
+        //                         match components.y {
+        //                             0b0000..=0b0111 => {
+        //                                 //Adds
+        //                                 write!(
+        //                                     writer,
+        //                                     "{:#04X?} : ADC A, {} \n",
+        //                                     byte,
+        //                                     OpComponents::convert_byte_to_8bit_reg_name(
+        //                                         &components.y
+        //                                     )
+        //                                 )?
+        //                             }
+        //                             _ => (),
+        //                         }
+        //                     }
+        //                     0b010 => match components.y {
+        //                         0b0000..=0b0111 => write!(
+        //                             writer,
+        //                             "{:#04X?} : SUB {} \n",
+        //                             byte,
+        //                             OpComponents::convert_byte_to_8bit_reg_name(&components.y)
+        //                         )?,
+        //                         _ => (),
+        //                     },
+        //                     0b011 => match components.y {
+        //                         0b0000..=0b0111 => write!(
+        //                             writer,
+        //                             "{:#04X?} : SUB A, {} \n",
+        //                             byte,
+        //                             OpComponents::convert_byte_to_8bit_reg_name(&components.y)
+        //                         )?,
+        //                         _ => (),
+        //                     },
+        //                     0b100 => match components.y {
+        //                         0b0000..=0b0111 => write!(
+        //                             writer,
+        //                             "{:#04X?} : AND {} \n",
+        //                             byte,
+        //                             OpComponents::convert_byte_to_8bit_reg_name(&components.y)
+        //                         )?,
+        //                         _ => (),
+        //                     },
+        //                     0b101 => match components.y {
+        //                         0b0000..=0b0111 => write!(
+        //                             writer,
+        //                             "{:#04X?} : XOR {} \n",
+        //                             byte,
+        //                             OpComponents::convert_byte_to_8bit_reg_name(&components.y)
+        //                         )?,
+        //                         _ => (),
+        //                     },
+        //                     0b110 => match components.y {
+        //                         0b0000..=0b0111 => write!(
+        //                             writer,
+        //                             "{:#04X?} : OR {} \n",
+        //                             byte,
+        //                             OpComponents::convert_byte_to_8bit_reg_name(&components.y)
+        //                         )?,
+        //                         _ => (),
+        //                     },
+        //                     0b111 => match components.y {
+        //                         0b0000..=0b0111 => write!(
+        //                             writer,
+        //                             "{:#04X?} : CP {} \n",
+        //                             byte,
+        //                             OpComponents::convert_byte_to_8bit_reg_name(&components.y)
+        //                         )?,
+        //                         _ => (),
+        //                     },
+        //                     _ => (),
+        //                 }
+        //             }
+        //             0b11 => match components.x {
+        //                 0b001 => match components.y {
+        //                     0b011 => { //PREFIX
+        //                         prefix_operand_to_process = true;
+        //                     }
+        //                     _ => (),
+        //                 }
+        //                 _ => (),
+        //             }
+        //             _ => (), //write!(writer, "{:#04X?}, ", byte)?,
+        //         }
+            // }
+        // }
         Ok(())
     }
 }
@@ -230,6 +267,20 @@ struct OpComponents {
     x: u8,
     y: u8,
     z: u8,
+}
+
+fn get_8bit_reg_name(byte: &u8) -> Register8Bit {
+    match byte {
+        0b000 => Register8Bit::B,
+        0b001 => Register8Bit::C,
+        0b010 => Register8Bit::D,
+        0b011 => Register8Bit::E,
+        0b100 => Register8Bit::H,
+        0b101 => Register8Bit::L,
+        0b110 => Register8Bit::HL,
+        0b111 => Register8Bit::A,
+        _ => panic!(),
+    }
 }
 
 impl OpComponents {
@@ -251,20 +302,6 @@ impl OpComponents {
             (0b11, RegType::HL) => "HL+",
             (0b10, RegType::SP) => "HL",
             (0b11, RegType::SP) => "SP",
-            _ => "NOT VALID REGISTER",
-        }
-    }
-
-    fn convert_byte_to_8bit_reg_name(byte: &u8) -> &str {
-        match byte {
-            0b000 => "B",
-            0b001 => "C",
-            0b010 => "D",
-            0b011 => "E",
-            0b100 => "H",
-            0b101 => "L",
-            0b110 => "(HL)",
-            0b111 => "A",
             _ => "NOT VALID REGISTER",
         }
     }

@@ -41,11 +41,12 @@ pub enum Opcode{
     SRA,
     BIT,
     RES,
-    SET
+    SET,
+    HALT
 }
 
 #[derive(Debug, Copy, Clone)]
-struct Operand{
+pub struct Operand{
    register_8bit: Option<Register8Bit>,
    register_16bit: Option<Register16Bit>,
    data_8bit: Option<u8>,
@@ -69,6 +70,7 @@ impl Operand{
             condition_code: None,
         }
     }
+    
     pub fn get_valid_field(self) -> String{
         match (&self.register_8bit, &self.register_16bit, &self.data_8bit, &self.data_16bit, &self.addr_8bit, &self.addr_16bit, &self.pc_relative_8bit, &self.condition_code){
             (Some(Register8Bit), ..) => format!("{:?}", self.register_8bit.unwrap()), 
@@ -82,11 +84,44 @@ impl Operand{
             _ => format!(""),
         }
     }
+    
+    pub fn add_reg_8bit(self, reg_8bit: Register8Bit) -> Self {
+        Operand { register_8bit: Some(reg_8bit), ..self } 
+    }
+
+    pub fn add_reg_16bit(self, reg_16bit: Register16Bit) -> Self {
+        Operand { register_16bit: Some(reg_16bit), ..self } 
+    }
+
+    pub fn add_data_8bit(self, d8: u8) -> Self {
+        Operand { data_8bit: Some(d8), ..self } 
+    }
+
+    pub fn add_data_16bit(self, d16: u16) -> Self {
+        Operand { data_16bit: Some(d16), ..self } 
+    }
+
+    pub fn add_addr_8bit(self, a8: u8) -> Self {
+        Operand { addr_8bit: Some(a8), ..self } 
+    }
+
+    pub fn add_addr_16bit(self, a16: u16) -> Self {
+        Operand { addr_16bit: Some(a16), ..self } 
+    }
+
+    pub fn add_pc_rel_8bit(self, r8: i8) -> Self {
+        Operand { pc_relative_8bit: Some(r8), ..self } 
+    }
+
+    pub fn add_cc(self, cc: ConditionCode) -> Self {
+        Operand { condition_code: Some(cc), ..self } 
+    }
+
 }
 
 #[derive(Default)]
 pub struct Instruction {
-    binary_value: u8,
+    pub binary_value: u8,
     opcode: Opcode,
     operand1: Option<Operand>,
     operand2: Option<Operand>,
@@ -103,25 +138,35 @@ impl Default for Opcode {
 }
 
 impl Instruction{
-    pub fn new(byte: u8, opcode: Opcode) -> Self{
+    pub fn new(byte: u8, opcode_type: Opcode) -> Self {
         let op = Operand::new();
         Instruction{ 
-            binary_value: 0x00, 
-            opcode: Opcode::LD,
-            operand1: Some(op),
+            binary_value: byte, 
+            opcode: opcode_type,
+            operand1: None,
             operand2: None,
         }
     }
+    pub fn add_operand(self, operand_number: u8, operand: Operand) -> Self {
+        match operand_number{
+            1 => Instruction{operand1: Some(operand), ..self},
+            2 => Instruction{operand2: Some(operand), ..self},
+            _ => self,
+        }
+    }
+
 }
 
 impl fmt::Display for Instruction{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut instruction_to_print = String::new();
         instruction_to_print.push_str(&format!("{:#04X?} : {:?}", self.binary_value, self.opcode));
+        
         match (&self.operand1, &self.operand2) {
             (None, None) => (),
-            (Some(Operand), _) => instruction_to_print.push_str(&format!(" {}", self.operand1.as_ref().unwrap())),
-            (_, Some(Operand)) => instruction_to_print.push_str(&format!(", {}", self.operand2.as_ref().unwrap())),
+            (Some(Operand), None) => instruction_to_print.push_str(&format!(" {}", self.operand1.as_ref().unwrap())),
+            (Some(Operand), _) => instruction_to_print.push_str(&format!(" {}, {}", self.operand1.as_ref().unwrap(), self.operand2.as_ref().unwrap())),
+            _ => ()
         }
         write!(f, "{}", instruction_to_print)
     }

@@ -26,6 +26,7 @@ pub enum Register8Bit {
     E,
     H,
     L,
+    HL,
 }
 #[derive(Debug, Copy, Clone)]
 pub enum Register16Bit {
@@ -55,6 +56,7 @@ impl RegFile {
             Register8Bit::E => self.e = val,
             Register8Bit::H => self.h = val,
             Register8Bit::L => self.l = val,
+            _ => panic!(),
         }
     }
 
@@ -68,6 +70,7 @@ impl RegFile {
             Register8Bit::E => self.e,
             Register8Bit::H => self.h,
             Register8Bit::L => self.l,
+            _ => panic!(),
         }
     }
 
