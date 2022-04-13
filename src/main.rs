@@ -5,7 +5,9 @@ use std::io::Read;
 mod disassembler;
 mod cpu;
 mod mem;
+mod instruction;
 
+use instruction::Instruction;
 use disassembler::Disassembler;
 
 #[derive(Parser, Debug)]
@@ -21,6 +23,8 @@ fn main() -> Result<(), std::io::Error> {
     let mut disassembled = String::new();
     file.read_to_end(&mut contents)?;
     let disas = Disassembler::new(contents);
+    let instruction = Instruction::new();
+    println!("{}", instruction);
     disas.convert_to_asm(&mut disassembled);
     println!("{}", disassembled);
     Ok(())

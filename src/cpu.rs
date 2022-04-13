@@ -16,7 +16,8 @@ struct RegFile {
     pc: u16,
 }
 
-enum Register8Bit {
+#[derive(Debug)]
+pub enum Register8Bit {
     A,
     F,
     B,
@@ -26,14 +27,21 @@ enum Register8Bit {
     H,
     L,
 }
-
-enum Register16Bit {
+#[derive(Debug)]
+pub enum Register16Bit {
     AF,
     BC,
     DE,
     HL,
     SP,
     PC,
+}
+#[derive(Debug)]
+pub enum ConditionCode{
+    Z,
+    N,
+    H,
+    C
 }
 
 impl RegFile {
