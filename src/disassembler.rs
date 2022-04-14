@@ -8,6 +8,25 @@ use crate::instruction::Operand;
 use crate::cpu::Register8Bit;
 use crate::cpu::Register16Bit;
 
+macro_rules! set_nop {
+  ($instruction: expr) => {$instruction = Instruction::new(0x00, Opcode::NOP); }
+}
+
+macro_rules! fetch_next_byte{
+    ($bytes: expr, $byte1: expr) => {
+        $byte1 = *$bytes.next().unwrap()
+    };
+
+    ($bytes: expr, $byte1: expr, $byte2: expr) => {
+        $byte1 = *$bytes.next().unwrap();
+        $byte2 = *$bytes.next().unwrap();
+    }
+}
+
+fn create_16bit_from_2_bytes(byte1: u8, byte2: u8){
+    
+}
+
 pub struct Disassembler {
     rom: Vec<u8>,
 }
@@ -18,22 +37,57 @@ impl Disassembler {
     }
 
     pub fn convert_to_asm(&self, writer: &mut impl Write) -> std::fmt::Result {
-        let mut single_operand_to_process = false;
-        let mut multiple_operands_to_process = 0;
-        let mut prefix_operand_to_process = false;
-        let mut asm_to_print = String::new();
-        let mut immediate_value: u16 = 0;
-        let mut process_3_bytes = true;
+        // let mut single_operand_to_process = false;
+        // let mut multiple_operands_to_process = 0;
+        // let mut prefix_operand_to_process = false;
+        // let mut asm_to_print = String::new();
+        // let mut immediate_value: u16 = 0;
+        // let mut process_3_bytes = true;
         let mut num_bytes = self.rom.len();
         let mut instruction = Instruction::new(0x00, Opcode::NOP);
+        let (mut byte1, mut byte2): (u8, u8);
+        let mut operand2: u8;
         let op1 = Operand::new();
         let op2 = Operand::new();
-        for (byte_num, byte) in self.rom.iter().enumerate() {
+        // for (bytes, byte) in contents.iter().enumerate {
+
+        // bytes.nth(0); //nth 0 for consuming next, nth 1 for consuming next 2
+        // println!("NICK: {}", bytes.size_hint().0);
+        let mut bytes = self.rom.iter();
+    
+        // for (byte_num, byte) in self.rom.iter().enumerate() {
+        while let Some(byte) = bytes.next(){
+            // write!(writer,"{:#04X?}\n", byte);
             let components = OpComponents::from_byte(byte);
-            let byte = *byte;
-            // match (byte_num + 3 < num_bytes) { 
+            let mut byte = *byte;
                 match components.t {
-                    0b00 => (),
+                    0b00 => {
+                        match components.x {
+                            0b000|0b010|0b100|0b110 => {
+                                match components.y{
+                                    0b001 =>{
+                                        fetch_next_byte!(bytes, byte1, byte2);
+                                        instruction = Instruction::new(byte, Opcode::LD)
+                                        .add_operand(1, op1.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::SP)))
+                                        .add_operand(2, op2.add_data_16bit_from_bytes(byte1, byte2));
+                                    },
+                                    0b010 =>{
+                                        instruction = Instruction::new(byte, Opcode::LD)
+                                        .add_operand(1, op1.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::HL)).add_addr_trait())
+                                        .add_operand(2, op2.add_reg_8bit(Register8Bit::A));
+                                    }
+                                    0b110 =>{
+                                        fetch_next_byte!(bytes, byte1);
+                                        instruction = Instruction::new(byte, Opcode::LD)
+                                        .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
+                                        .add_operand(2, op2.add_data_8bit(byte1));
+                                    },
+                                    _ => set_nop!(instruction),
+                                }
+                            }
+                            _ => set_nop!(instruction),
+                        }
+                    },
                     0b01 => {
                         if components.x == 6 && components.y == 6 { 
                             instruction = Instruction::new(byte, Opcode::HALT);
@@ -41,16 +95,16 @@ impl Disassembler {
                         else { 
                             instruction = Instruction::new(byte, Opcode::LD)
                             .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)))
-                            .add_operand(2, op2.add_reg_8bit(get_8bit_reg_name(&components.y)));
+                            .add_operand(2, op2.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
                         }
                     },
                     0b10 => (),
                     0b11 => (),
-                    _ => (),
+                    _ => set_nop!(instruction),
                 }
                 if(instruction.binary_value != 0x00){
                     write!(writer, "{}\n", instruction);
-                    instruction = Instruction::new(0x00, Opcode::NOP);
+                    set_nop!(instruction);
                 }
             }
         //     let components = OpComponents::from_byte(byte);
@@ -102,7 +156,6 @@ impl Disassembler {
         //                                 &components.z,
         //                                 RegType::HL)
         //                             )?
-                                
         //                     }
         //                     0b110 => {
         //                         //merge?
@@ -269,7 +322,7 @@ struct OpComponents {
     z: u8,
 }
 
-fn get_8bit_reg_name(byte: &u8) -> Register8Bit {
+pub fn get_8bit_reg_name(byte: &u8) -> Register8Bit {
     match byte {
         0b000 => Register8Bit::B,
         0b001 => Register8Bit::C,
@@ -279,6 +332,18 @@ fn get_8bit_reg_name(byte: &u8) -> Register8Bit {
         0b101 => Register8Bit::L,
         0b110 => Register8Bit::HL,
         0b111 => Register8Bit::A,
+        _ => panic!(),
+    }
+}
+
+fn get_16bit_reg_name(byte: &u8, reg_type: RegType) -> Register16Bit {
+    match (byte, reg_type) {
+        (0b00, _) => Register16Bit::BC,
+        (0b01, _) => Register16Bit::DE,
+        (0b10, RegType::HL) => Register16Bit::HLp,
+        (0b11, RegType::HL) => Register16Bit::HLm,
+        (0b10, RegType::SP) => Register16Bit::HL,
+        (0b11, RegType::SP) => Register16Bit::SP,
         _ => panic!(),
     }
 }
@@ -294,17 +359,7 @@ impl OpComponents {
         }
     }
     
-    fn convert_byte_to_16bit_reg_name(byte: &u8, reg_type: RegType) -> &str {
-        match (byte, reg_type) {
-            (0b00, _) => "BC",
-            (0b01, _) => "DE",
-            (0b10, RegType::HL) => "HL-",
-            (0b11, RegType::HL) => "HL+",
-            (0b10, RegType::SP) => "HL",
-            (0b11, RegType::SP) => "SP",
-            _ => "NOT VALID REGISTER",
-        }
-    }
+  
 
     fn process_prefix(byte: &u8) -> &str {
         return "PREFIX" 

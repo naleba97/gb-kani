@@ -36,6 +36,8 @@ pub enum Register16Bit {
     HL,
     SP,
     PC,
+    HLp,
+    HLm,
 }
 #[derive(Debug, Copy, Clone)]
 pub enum ConditionCode{
@@ -99,6 +101,7 @@ impl RegFile {
             Register16Bit::PC => {
                 self.pc = val;
             },
+            _ => panic!(),
         }
     }
 }

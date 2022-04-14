@@ -25,8 +25,6 @@ fn main() -> Result<(), std::io::Error> {
     let mut disassembled = String::new();
     file.read_to_end(&mut contents)?;
     let disas = Disassembler::new(contents);
-    // let instruction = Instruction::new(0x31, Opcode::LD);
-    // println!("{}", instruction);
     disas.convert_to_asm(&mut disassembled);
     println!("{}", disassembled);
     Ok(())
