@@ -56,9 +56,10 @@ impl Disassembler {
         let mut bytes = self.rom.iter();
     
         // for (byte_num, byte) in self.rom.iter().enumerate() {
+        //TODO: to merge Same<identifier>
         while let Some(byte) = bytes.next(){
             // write!(writer,"{:#04X?}\n", byte);
-            let components = OpComponents::from_byte(byte);
+            let mut components = OpComponents::from_byte(byte);
             let mut byte = *byte;
                 match components.t {
                     0b00 => {
@@ -71,17 +72,33 @@ impl Disassembler {
                                         .add_operand(1, op1.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::SP)))
                                         .add_operand(2, op2.add_data_16bit_from_bytes(byte1, byte2));
                                     },
-                                    0b010 =>{
+                                    0b010 =>{ 
                                         instruction = Instruction::new(byte, Opcode::LD)
                                         .add_operand(1, op1.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::HL)).add_addr_trait())
                                         .add_operand(2, op2.add_reg_8bit(Register8Bit::A));
                                     }
-                                    0b110 =>{
+                                    0b110 =>{ //TODO: SameA
                                         fetch_next_byte!(bytes, byte1);
                                         instruction = Instruction::new(byte, Opcode::LD)
                                         .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
                                         .add_operand(2, op2.add_data_8bit(byte1));
                                     },
+                                    _ => set_nop!(instruction),
+                                }
+                            }
+                            0b001|0b011|0b101|0b111 => {
+                                match components.y{
+                                    0b010 =>{
+                                        instruction = Instruction::new(byte, Opcode::LD)
+                                        .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
+                                        .add_operand(2, op2.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::HL)).add_addr_trait());
+                                    },
+                                    0b111 =>{ //TODO: SameA
+                                        fetch_next_byte!(bytes, byte1);
+                                        instruction = Instruction::new(byte, Opcode::LD)
+                                        .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
+                                        .add_operand(2, op2.add_data_8bit(byte1));
+                                    }
                                     _ => set_nop!(instruction),
                                 }
                             }
@@ -94,12 +111,74 @@ impl Disassembler {
                         }
                         else { 
                             instruction = Instruction::new(byte, Opcode::LD)
-                            .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)))
+                            .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
                             .add_operand(2, op2.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
                         }
                     },
-                    0b10 => (),
-                    0b11 => (),
+                    0b10 => {  //Arithmetic
+                        match components.x{
+                            0b000 =>{
+                                instruction = Instruction::new(byte, Opcode::ADD)
+                                .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
+                                .add_operand(2, op2.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                            }
+                            0b001 =>{
+                                instruction = Instruction::new(byte, Opcode::ADC)
+                                .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
+                                .add_operand(2, op2.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                            }
+                            0b010 =>{
+                                instruction = Instruction::new(byte, Opcode::SUB)
+                                .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                            }
+                            0b011 =>{
+                                instruction = Instruction::new(byte, Opcode::SBC)
+                                .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                            }
+                            0b100 =>{
+                                instruction = Instruction::new(byte, Opcode::AND)
+                                .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                            }
+                            0b101 =>{
+                                instruction = Instruction::new(byte, Opcode::XOR)
+                                .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                            }
+                            0b110 =>{
+                                instruction = Instruction::new(byte, Opcode::OR)
+                                .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                            }
+                            0b111 =>{
+                                instruction = Instruction::new(byte, Opcode::CP)
+                                .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                            }
+                            _ => set_nop!(instruction),
+                        }
+                    },
+                    0b11 => {
+                        match components.x {
+                            0b001 => match components.y {
+                                0b011 => { //PREFIX
+                                    fetch_next_byte!(bytes, byte1);
+                                    let prefix_opcode = get_prefix_opcode(&byte1);
+                                    components = OpComponents::from_byte(&byte1);
+                                    match prefix_opcode {
+                                        Opcode::BIT|Opcode::RES|Opcode::SET => {
+                                            instruction = Instruction::new(byte1, prefix_opcode)
+                                            .add_operand(1, op1.add_prefix_num(components.x))
+                                            .add_operand(2, op2.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                                        }
+                                        _ => {
+                                            instruction = Instruction::new(byte, prefix_opcode)
+                                            .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait())
+                                        }
+                                    }
+                                    
+                                }
+                                _ => set_nop!(instruction),
+                            }
+                            _ => set_nop!(instruction),
+                        }
+                    },
                     _ => set_nop!(instruction),
                 }
                 if(instruction.binary_value != 0x00){
@@ -320,6 +399,23 @@ struct OpComponents {
     x: u8,
     y: u8,
     z: u8,
+}
+
+pub fn get_prefix_opcode(byte: &u8) -> Opcode{
+    match byte{
+        0b0000_0000..=0b0000_0111 => Opcode::RLC, 
+        0b0000_1000..=0b0000_1111 => Opcode::RRC,
+        0b0001_0000..=0b0001_0111 => Opcode::RL,
+        0b0001_1000..=0b0001_1111 => Opcode::RR, 
+        0b0010_0000..=0b0010_0111 => Opcode::SLA, 
+        0b0010_1000..=0b0010_1111 => Opcode::SRA, 
+        0b0011_0000..=0b0011_0111 => Opcode::SWAP,
+        0b0011_1000..=0b0011_1111 => Opcode::SRL,
+        0b0100_0000..=0b0111_1111 => Opcode::BIT,
+        0b1000_0000..=0b1011_1111 => Opcode::RES,
+        0b1100_0000..=0b1111_1111 => Opcode::SET,
+        _ => panic!(),
+    }
 }
 
 pub fn get_8bit_reg_name(byte: &u8) -> Register8Bit {

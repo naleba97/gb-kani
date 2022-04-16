@@ -3,6 +3,7 @@ use crate::cpu::Register16Bit;
 use crate::cpu::ConditionCode;
 use std::fmt;
 use std::time::Instant;
+use std::any::type_name;
 
 #[derive(Debug)]
 pub enum Opcode{
@@ -39,6 +40,8 @@ pub enum Opcode{
     RR,
     SLA,
     SRA,
+    SWAP,
+    SRL,
     BIT,
     RES,
     SET,
@@ -56,6 +59,7 @@ pub struct Operand{
    pc_relative_8bit: Option<i8>,
    condition_code: Option<ConditionCode>,
    is_addr: bool,
+   prefix_num: Option<u8>,
 }
 
 impl Operand{
@@ -70,18 +74,20 @@ impl Operand{
             pc_relative_8bit: None,
             condition_code: None,
             is_addr: false,
+            prefix_num: None,
         }
     }
     
     pub fn get_valid_field(self) -> String{
-        match (&self.register_8bit, &self.register_16bit, &self.data_8bit, &self.data_16bit, &self.addr_8bit, &self.addr_16bit, &self.pc_relative_8bit, &self.condition_code){
+        match (&self.register_8bit, &self.register_16bit, &self.data_8bit, &self.data_16bit, &self.addr_8bit, &self.addr_16bit, &self.prefix_num, &self.pc_relative_8bit, &self.condition_code){
             (Some(Register8Bit), ..) => format!("{:?}", self.register_8bit.unwrap()), 
             (_, Some(Register16Bit), ..) => format!("{:?}", self.register_16bit.unwrap()), 
             (_,_, Some(u8), ..) => format!("{:#04X?}", self.data_8bit.unwrap()),
             (_,_,_, Some(u8), ..) => format!("{:#06X?}", self.data_16bit.unwrap()),
             (_,_,_,_, Some(u16), ..) => format!("{:?}", self.addr_8bit.unwrap()),
             (_,_,_,_,_, Some(u16), ..) => format!("{:?}", self.addr_16bit.unwrap()),
-            (_,_,_,_,_,_,Some(i8), _) => format!("{:?}", self.pc_relative_8bit.unwrap()),
+            (_,_,_,_,_,_, Some(u8), ..) => format!("{:?}", self.prefix_num.unwrap()),
+            (_,_,_,_,_,_,_,Some(i8), _) => format!("{:?}", self.pc_relative_8bit.unwrap()),
             (.., Some(ConditionCode)) => format!("{:?}", self.condition_code.unwrap()),
             _ => format!(""),
         }
@@ -123,6 +129,10 @@ impl Operand{
 
     pub fn add_cc(self, cc: ConditionCode) -> Self {
         Operand { condition_code: Some(cc), ..self } 
+    }
+
+    pub fn add_prefix_num(self, prefix_num: u8) -> Self {
+        Operand { prefix_num: Some(prefix_num), ..self } 
     }
 
     pub fn add_addr_trait(self) -> Self{
@@ -177,8 +187,11 @@ impl fmt::Display for Instruction{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut instruction_to_print = String::new();
         instruction_to_print.push_str(&format!("{:#04X?} : {:?}", self.binary_value, self.opcode));
+
+        let mut op1_is_addr = &(self.operand1.unwrap().is_addr);
+        let mut op2_is_addr = if (self.operand2.is_none()) {false} else {(self.operand2.unwrap().is_addr)};
         
-        match (&self.operand1, &self.operand2, &(self.operand1.unwrap().is_addr), &(self.operand2.unwrap().is_addr)) {
+        match (&self.operand1, &self.operand2, op1_is_addr, op2_is_addr) {
             (None, None, ..) => (),
             (Some(Operand), None, true, _) => instruction_to_print.push_str(&format!(" ({})", self.operand1.as_ref().unwrap())),
             (Some(Operand), None, false, _) => instruction_to_print.push_str(&format!(" {}", self.operand1.as_ref().unwrap())),
@@ -190,6 +203,7 @@ impl fmt::Display for Instruction{
 
         instruction_to_print = instruction_to_print.replace("HLm", "HL-");
         instruction_to_print = instruction_to_print.replace("HLp", "HL+");
+        instruction_to_print = instruction_to_print.replace(", 0x", ", $");
 
         write!(f, "{}", instruction_to_print)
     }
