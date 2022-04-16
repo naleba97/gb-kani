@@ -28,6 +28,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut contents = Vec::new();
     let mut disassembled = String::new();
     file.read_to_end(&mut contents)?;
+
     //uncomment below for single instruction debug
     // let op1 = Operand::new();
     // let op2 = Operand::new();
@@ -35,8 +36,12 @@ fn main() -> Result<(), std::io::Error> {
     // .add_operand(1, op1.add_addr_8bit(0x69))
     // .add_operand(2, op2.add_reg_8bit(Register8Bit::A));
     // println!("{}", instruction);
+    
     let disas = Disassembler::new(contents);
     disas.convert_to_asm(&mut disassembled);
     println!("{}", disassembled);
+    // for (line_num, byte) in contents.iter().enumerate() {
+    //     println!("Line {:#04X?} : {:#04X?}", line_num, byte);
+    // }
     Ok(())
 }

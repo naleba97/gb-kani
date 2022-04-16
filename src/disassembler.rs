@@ -122,11 +122,32 @@ impl Disassembler {
                         }
                         0b001|0b011|0b101|0b111 => {
                             match components.y{
+                                0b000 => {
+                                    fetch_next_byte!(bytes, byte1);
+                                    increment_pc!(2,next_pc);
+                                    match components.z{
+                                        0b01 => {
+                                            instruction = Instruction::new(byte, Opcode::JR)
+                                            .add_operand(1, op1.add_pc_rel_8bit(byte1 as i8));
+                                        }
+                                        0b10|0b11 => {
+                                            instruction = Instruction::new(byte, Opcode::JR)
+                                            .add_operand(1, op1.add_cc(get_cc_operand(&components.x)))
+                                            .add_operand(2, op2.add_pc_rel_8bit(byte1 as i8));
+                                        }
+                                        _ => set_nop!(instruction),
+                                    }
+                                }
                                 0b010 =>{
                                     increment_pc!(1,next_pc);
                                     instruction = Instruction::new(byte, Opcode::LD)
                                     .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
                                     .add_operand(2, op2.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::HL)).add_addr_trait());
+                                },
+                                0b011 =>{ 
+                                    increment_pc!(1,next_pc);
+                                    instruction = Instruction::new(byte, Opcode::DEC)
+                                    .add_operand(1, op1.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::SP)))
                                 },
                                 0b100 =>{ //TODO: SameB
                                     increment_pc!(1,next_pc);
@@ -255,6 +276,26 @@ impl Disassembler {
                                 .add_operand(1, op1.add_cc(get_cc_operand(&components.x)))
                                 .add_operand(2, op2.add_addr_16bit(byte1, byte2).remove_addr_trait_from_addr());
                             }
+                            0b010 => {
+                                match components.z{
+                                    0b10|0b11 => {
+                                        fetch_next_byte!(bytes, byte1, byte2);
+                                        increment_pc!(3,next_pc);
+                                        instruction = Instruction::new(byte, Opcode::LD);
+                                        if(components.z == u8::from(0b10)) {
+                                            instruction = instruction
+                                            .add_operand(1, op1.add_addr_16bit(byte1, byte2))
+                                            .add_operand(2, op2.add_reg_8bit(Register8Bit::A));
+                                        }
+                                        else{
+                                            instruction = instruction
+                                            .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
+                                            .add_operand(2, op2.add_addr_16bit(byte1, byte2))
+                                        }
+                                    }
+                                    _ => set_nop!(instruction),
+                                }
+                            }
                             0b101 => { 
                                 fetch_next_byte!(bytes, byte1, byte2);
                                 increment_pc!(3,next_pc);
@@ -325,6 +366,9 @@ impl Disassembler {
             if(instruction.binary_value != 0x00){
                 write!(writer, "Prev_PC: {:#06X?} | Next_PC {:#06X?} | Instruction: {}\n", prev_pc, next_pc, instruction);
                 set_nop!(instruction);
+            }
+            else{
+                write!(writer, "Byte not mapped to instruction:{:#06X?}\n", byte);
             }
         }
         Ok(())
