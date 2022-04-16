@@ -45,7 +45,9 @@ pub enum Opcode{
     BIT,
     RES,
     SET,
-    HALT
+    HALT,
+    CPL,
+    CCF,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -202,7 +204,7 @@ impl fmt::Display for Instruction{
         let mut instruction_to_print = String::new();
         instruction_to_print.push_str(&format!("{:#04X?} : {:?}", self.binary_value, self.opcode));
 
-        let mut op1_is_addr = &(self.operand1.unwrap().is_addr);
+        let mut op1_is_addr = if (self.operand1.is_none()) {false} else {(self.operand1.unwrap().is_addr)};
         let mut op2_is_addr = if (self.operand2.is_none()) {false} else {(self.operand2.unwrap().is_addr)};
 
         match (&self.operand1, &self.operand2, op1_is_addr, op2_is_addr) {

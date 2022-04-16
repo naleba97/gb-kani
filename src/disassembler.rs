@@ -117,6 +117,25 @@ impl Disassembler {
                                     .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
                                     .add_operand(2, op2.add_data_8bit(byte1));
                                 },
+                                0b111 =>{ 
+                                    increment_pc!(1,next_pc);
+                                    match components.z{
+                                      0b00 => {
+                                        instruction = Instruction::new(byte, Opcode::RLCA)
+                                      }
+                                      0b01 => {
+                                        instruction = Instruction::new(byte, Opcode::RLA)
+                                      }
+                                      0b10 => {
+                                        instruction = Instruction::new(byte, Opcode::DAA)
+                                      }
+                                      0b11 => {
+                                        instruction = Instruction::new(byte, Opcode::SCF)
+                                      }
+                                    _ => set_nop!(instruction),
+                                    }
+
+                                },
                                 _ => set_nop!(instruction),
                             }
                         }
@@ -165,7 +184,26 @@ impl Disassembler {
                                     instruction = Instruction::new(byte, Opcode::LD)
                                     .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
                                     .add_operand(2, op2.add_data_8bit(byte1));
-                                }
+                                },
+                                0b111 =>{ 
+                                    increment_pc!(1,next_pc);
+                                    match components.z{
+                                      0b00 => {
+                                        instruction = Instruction::new(byte, Opcode::RRCA)
+                                      }
+                                      0b01 => {
+                                        instruction = Instruction::new(byte, Opcode::RRA)
+                                      }
+                                      0b10 => {
+                                        instruction = Instruction::new(byte, Opcode::CPL)
+                                      }
+                                      0b11 => {
+                                        instruction = Instruction::new(byte, Opcode::CCF)
+                                      }
+                                    _ => set_nop!(instruction),
+                                    }
+
+                                },
                                 _ => set_nop!(instruction),
                             }
                         }
@@ -320,6 +358,11 @@ impl Disassembler {
                                         .add_operand(2, op2.add_addr_8bit(byte1));
                                     }
                                 }
+                                0b001 => { //TODO: SameE
+                                    increment_pc!(1,next_pc);
+                                    instruction = Instruction::new(byte, Opcode::POP)
+                                    .add_operand(1, op1.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::AF)))
+                                }
                                 0b010 => {
                                     increment_pc!(1,next_pc);
                                     let (mut op1_reg, mut op2_reg): (Register8Bit, Register8Bit);
@@ -335,6 +378,11 @@ impl Disassembler {
                                     .add_operand(1, op1.add_reg_8bit_addr(op1_reg))
                                     .add_operand(2, op2.add_reg_8bit(op2_reg));
                                 }
+                                0b101 => { //TODO: SameF
+                                    increment_pc!(1,next_pc);
+                                    instruction = Instruction::new(byte, Opcode::PUSH)
+                                    .add_operand(1, op1.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::AF)))
+                                }
                                 _ => set_nop!(instruction),
                             }
                                 
@@ -348,12 +396,22 @@ impl Disassembler {
                                     .add_operand(1, op1.add_cc(get_cc_operand(&components.x)))
                                     .add_operand(2, op2.add_addr_16bit(byte1, byte2));
                                 }
+                                0b001 => { //TODO: SameE
+                                    increment_pc!(1,next_pc);
+                                    instruction = Instruction::new(byte, Opcode::POP)
+                                    .add_operand(1, op1.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::AF)))
+                                }
                                 0b100 => { //TODO: SameC
                                     fetch_next_byte!(bytes, byte1, byte2);
                                     increment_pc!(3,next_pc);
                                     instruction = Instruction::new(byte, Opcode::CALL)
                                     .add_operand(1, op1.add_cc(get_cc_operand(&components.x)))
                                     .add_operand(2, op2.add_addr_16bit(byte1, byte2).remove_addr_trait_from_addr());
+                                }
+                                0b101 => { //TODO: SameF
+                                    increment_pc!(1,next_pc);
+                                    instruction = Instruction::new(byte, Opcode::PUSH)
+                                    .add_operand(1, op1.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::AF)))
                                 }
                                 _ => set_nop!(instruction),
                             }
@@ -377,7 +435,8 @@ impl Disassembler {
 
 enum RegType {
     SP,
-    HL
+    HL,
+    AF,
 }
 
 struct OpComponents {
@@ -426,6 +485,8 @@ fn get_16bit_reg_name(byte: &u8, reg_type: RegType) -> Register16Bit {
         (0b11, RegType::HL) => Register16Bit::HLm,
         (0b10, RegType::SP) => Register16Bit::HL,
         (0b11, RegType::SP) => Register16Bit::SP,
+        (0b10, RegType::AF) => Register16Bit::HL,
+        (0b11, RegType::AF) => Register16Bit::AF,
         _ => panic!(),
     }
 }
