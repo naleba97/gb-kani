@@ -65,198 +65,268 @@ impl Disassembler {
             prev_pc = next_pc;
             let mut components = OpComponents::from_byte(byte);
             let mut byte = *byte;
-                match components.t {
-                    0b00 => {
-                        match components.x {
-                            0b000|0b010|0b100|0b110 => {
-                                match components.y{
-                                    0b000 =>{
-                                        match components.x {
-                                            0b100|0b110 => {
-                                                fetch_next_byte!(bytes, byte1);
-                                                increment_pc!(2, next_pc);
-                                                instruction = Instruction::new(byte, Opcode::JR)
-                                                .add_operand(1, op1.add_cc(get_cc_operand(&components.x)))
-                                                .add_operand(2, op2.add_pc_rel_8bit(byte1 as i8));
-                                            },
-                                            _ => set_nop!(instruction),
-                                        }
+            match components.t {
+                0b00 => {
+                    match components.x {
+                        0b000|0b010|0b100|0b110 => {
+                            match components.y{
+                                0b000 =>{
+                                    match components.x {
+                                        0b100|0b110 => {
+                                            fetch_next_byte!(bytes, byte1);
+                                            increment_pc!(2, next_pc);
+                                            instruction = Instruction::new(byte, Opcode::JR)
+                                            .add_operand(1, op1.add_cc(get_cc_operand(&components.x)))
+                                            .add_operand(2, op2.add_pc_rel_8bit(byte1 as i8));
+                                        },
+                                        _ => set_nop!(instruction),
                                     }
-                                    0b001 =>{
-                                        fetch_next_byte!(bytes, byte1, byte2);
-                                        increment_pc!(3,next_pc);
-                                        instruction = Instruction::new(byte, Opcode::LD)
-                                        .add_operand(1, op1.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::SP)))
-                                        .add_operand(2, op2.add_data_16bit_from_bytes(byte1, byte2));
-                                    },
-                                    0b010 =>{ 
-                                        increment_pc!(1,next_pc);
-                                        instruction = Instruction::new(byte, Opcode::LD)
-                                        .add_operand(1, op1.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::HL)).add_addr_trait())
-                                    } 
-                                    0b100 =>{ //TODO: SameB
-                                        increment_pc!(1,next_pc);
-                                        instruction = Instruction::new(byte, Opcode::INC)
-                                        .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
-                                    }
-                                    0b110 =>{ //TODO: SameA
-                                        fetch_next_byte!(bytes, byte1);
-                                        increment_pc!(2,next_pc);
-                                        instruction = Instruction::new(byte, Opcode::LD)
-                                        .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
-                                        .add_operand(2, op2.add_data_8bit(byte1));
-                                    },
-                                    _ => set_nop!(instruction),
                                 }
-                            }
-                            0b001|0b011|0b101|0b111 => {
-                                match components.y{
-                                    0b010 =>{
-                                        increment_pc!(1,next_pc);
-                                        instruction = Instruction::new(byte, Opcode::LD)
-                                        .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
-                                        .add_operand(2, op2.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::HL)).add_addr_trait());
-                                    },
-                                    0b100 =>{ //TODO: SameB
-                                        increment_pc!(1,next_pc);
-                                        instruction = Instruction::new(byte, Opcode::INC)
-                                        .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
-                                    },
-                                    0b110 =>{ //TODO: SameA
-                                        fetch_next_byte!(bytes, byte1);
-                                        increment_pc!(2,next_pc);
-                                        instruction = Instruction::new(byte, Opcode::LD)
-                                        .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
-                                        .add_operand(2, op2.add_data_8bit(byte1));
-                                    }
-                                    _ => set_nop!(instruction),
+                                0b001 =>{
+                                    fetch_next_byte!(bytes, byte1, byte2);
+                                    increment_pc!(3,next_pc);
+                                    instruction = Instruction::new(byte, Opcode::LD)
+                                    .add_operand(1, op1.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::SP)))
+                                    .add_operand(2, op2.add_data_16bit_from_bytes(byte1, byte2));
+                                },
+                                0b010 =>{ 
+                                    increment_pc!(1,next_pc);
+                                    instruction = Instruction::new(byte, Opcode::LD)
+                                    .add_operand(1, op1.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::HL)).add_addr_trait())
+                                    .add_operand(2, op2.add_reg_8bit(Register8Bit::A))
+                                } 
+                                0b011 =>{ 
+                                    increment_pc!(1,next_pc);
+                                    instruction = Instruction::new(byte, Opcode::INC)
+                                    .add_operand(1, op1.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::SP)))
+                                } 
+                                0b100 =>{ //TODO: SameB
+                                    increment_pc!(1,next_pc);
+                                    instruction = Instruction::new(byte, Opcode::INC)
+                                    .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
                                 }
-                            }
-                            
-
-                            _ => set_nop!(instruction),
-                        }
-                    },
-                    0b01 => {
-                        if components.x == 6 && components.y == 6 { 
-                            increment_pc!(1,next_pc);
-                            instruction = Instruction::new(byte, Opcode::HALT);
-                        }
-                        else { 
-                            increment_pc!(1,next_pc);
-                            instruction = Instruction::new(byte, Opcode::LD)
-                            .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
-                            .add_operand(2, op2.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
-                        }
-                    },
-                    0b10 => {  //Arithmetic
-                        increment_pc!(1,next_pc);
-                        match components.x{
-                            0b000 =>{
-                                instruction = Instruction::new(byte, Opcode::ADD)
-                                .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
-                                .add_operand(2, op2.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
-                            }
-                            0b001 =>{
-                                instruction = Instruction::new(byte, Opcode::ADC)
-                                .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
-                                .add_operand(2, op2.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
-                            }
-                            0b010 =>{
-                                instruction = Instruction::new(byte, Opcode::SUB)
-                                .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
-                            }
-                            0b011 =>{
-                                instruction = Instruction::new(byte, Opcode::SBC)
-                                .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
-                            }
-                            0b100 =>{
-                                instruction = Instruction::new(byte, Opcode::AND)
-                                .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
-                            }
-                            0b101 =>{
-                                instruction = Instruction::new(byte, Opcode::XOR)
-                                .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
-                            }
-                            0b110 =>{
-                                instruction = Instruction::new(byte, Opcode::OR)
-                                .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
-                            }
-                            0b111 =>{
-                                instruction = Instruction::new(byte, Opcode::CP)
-                                .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
-                            }
-                            _ => set_nop!(instruction),
-                        }
-                    },
-                    0b11 => {
-                        match components.x {
-                            0b001 => match components.y {
-                                0b011 => { //PREFIX
+                                0b101 =>{ //TODO: SameD
+                                    increment_pc!(1,next_pc);
+                                    instruction = Instruction::new(byte, Opcode::DEC)
+                                    .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
+                                }
+                                0b110 =>{ //TODO: SameA
                                     fetch_next_byte!(bytes, byte1);
                                     increment_pc!(2,next_pc);
-                                    let prefix_opcode = get_prefix_opcode(&byte1);
-                                    components = OpComponents::from_byte(&byte1);
-                                    match prefix_opcode {
-                                        Opcode::BIT|Opcode::RES|Opcode::SET => {
-                                            instruction = Instruction::new(byte1, prefix_opcode)
-                                            .add_operand(1, op1.add_prefix_num(components.x))
-                                            .add_operand(2, op2.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
-                                        }
-                                        _ => {
-                                            instruction = Instruction::new(byte, prefix_opcode)
-                                            .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait())
-                                        }
-                                    }
-                                    
+                                    instruction = Instruction::new(byte, Opcode::LD)
+                                    .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
+                                    .add_operand(2, op2.add_data_8bit(byte1));
+                                },
+                                _ => set_nop!(instruction),
+                            }
+                        }
+                        0b001|0b011|0b101|0b111 => {
+                            match components.y{
+                                0b010 =>{
+                                    increment_pc!(1,next_pc);
+                                    instruction = Instruction::new(byte, Opcode::LD)
+                                    .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
+                                    .add_operand(2, op2.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::HL)).add_addr_trait());
+                                },
+                                0b100 =>{ //TODO: SameB
+                                    increment_pc!(1,next_pc);
+                                    instruction = Instruction::new(byte, Opcode::INC)
+                                    .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
+                                },
+                                0b101 =>{ //TODO: SameD
+                                    increment_pc!(1,next_pc);
+                                    instruction = Instruction::new(byte, Opcode::DEC)
+                                    .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
+                                },
+                                0b110 =>{ //TODO: SameA
+                                    fetch_next_byte!(bytes, byte1);
+                                    increment_pc!(2,next_pc);
+                                    instruction = Instruction::new(byte, Opcode::LD)
+                                    .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
+                                    .add_operand(2, op2.add_data_8bit(byte1));
                                 }
                                 _ => set_nop!(instruction),
                             }
-                            0b100|110 => {
-                                match components.y{
-                                    0b000 => {
-                                        fetch_next_byte!(bytes, byte1);
-                                        increment_pc!(2,next_pc);
-                                        if(components.x == u8::from(0b100)) {
-                                            instruction = Instruction::new(byte, Opcode::LDH)
-                                            .add_operand(1, op1.add_addr_8bit(byte1))
-                                            .add_operand(2, op2.add_reg_8bit(Register8Bit::A));
-                                        }
-                                        else{
-                                            instruction = Instruction::new(byte, Opcode::LDH)
-                                            .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
-                                            .add_operand(2, op2.add_addr_8bit(byte1));
-                                        }
+                        }
+                        _ => set_nop!(instruction),
+                    }
+                },
+                0b01 => {
+                    if components.x == 6 && components.y == 6 { 
+                        increment_pc!(1,next_pc);
+                        instruction = Instruction::new(byte, Opcode::HALT);
+                    }
+                    else { 
+                        increment_pc!(1,next_pc);
+                        instruction = Instruction::new(byte, Opcode::LD)
+                        .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
+                        .add_operand(2, op2.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                    }
+                },
+                0b10 => {  //Arithmetic
+                    increment_pc!(1,next_pc);
+                    match components.x{
+                        0b000 =>{
+                            instruction = Instruction::new(byte, Opcode::ADD)
+                            .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
+                            .add_operand(2, op2.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                        }
+                        0b001 =>{
+                            instruction = Instruction::new(byte, Opcode::ADC)
+                            .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
+                            .add_operand(2, op2.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                        }
+                        0b010 =>{
+                            instruction = Instruction::new(byte, Opcode::SUB)
+                            .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                        }
+                        0b011 =>{
+                            instruction = Instruction::new(byte, Opcode::SBC)
+                            .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                        }
+                        0b100 =>{
+                            instruction = Instruction::new(byte, Opcode::AND)
+                            .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                        }
+                        0b101 =>{
+                            instruction = Instruction::new(byte, Opcode::XOR)
+                            .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                        }
+                        0b110 =>{
+                            instruction = Instruction::new(byte, Opcode::OR)
+                            .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                        }
+                        0b111 =>{
+                            instruction = Instruction::new(byte, Opcode::CP)
+                            .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
+                        }
+                        _ => set_nop!(instruction),
+                    }
+                },
+                0b11 => {
+                    match components.x {
+                        0b001|0b011|0b101|0b111 => match components.y {
+                            0b011 => { //PREFIX
+                                fetch_next_byte!(bytes, byte1);
+                                increment_pc!(2,next_pc);
+                                let prefix_opcode = get_prefix_opcode(&byte1);
+                                components = OpComponents::from_byte(&byte1);
+                                match prefix_opcode {
+                                    Opcode::BIT|Opcode::RES|Opcode::SET => {
+                                        instruction = Instruction::new(byte1, prefix_opcode)
+                                        .add_operand(1, op1.add_prefix_num(components.x))
+                                        .add_operand(2, op2.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
                                     }
-                                    0b010 => {
-                                        increment_pc!(1,next_pc);
-                                        let (mut op1_reg, mut op2_reg): (Register8Bit, Register8Bit);
-                                        if(components.x == u8::from(0b100)) {
-                                            op1_reg = Register8Bit::C;
-                                            op2_reg = Register8Bit::A;
-                                        }
-                                        else{
-                                            op1_reg = Register8Bit::A;
-                                            op2_reg = Register8Bit::C;
-                                        }
-                                        instruction = Instruction::new(byte, Opcode::LD)
-                                        .add_operand(1, op1.add_reg_8bit_addr(op1_reg))
-                                        .add_operand(2, op2.add_reg_8bit(op2_reg));
+                                    _ => {
+                                        instruction = Instruction::new(byte, prefix_opcode)
+                                        .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait())
+                                    }
+                                }
+                            },
+                            0b110 =>{
+                                fetch_next_byte!(bytes, byte1);
+                                increment_pc!(2,next_pc);
+                                match components.z{
+                                    0b00 => {
+                                        instruction = Instruction::new(byte, Opcode::ADC)
+                                        .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
+                                        .add_operand(2, op2.add_data_8bit(byte1))
+                                    }
+                                    0b01 => {
+                                        instruction = Instruction::new(byte, Opcode::SBC)
+                                        .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
+                                        .add_operand(2, op2.add_data_8bit(byte1))
+                                    }
+                                    0b10 => {
+                                        instruction = Instruction::new(byte, Opcode::XOR)
+                                        .add_operand(1, op1.add_data_8bit(byte1))
+                                    }
+                                    0b11 => {
+                                        instruction = Instruction::new(byte, Opcode::CP)
+                                        .add_operand(1, op1.add_data_8bit(byte1))
                                     }
                                     _ => set_nop!(instruction),
                                 }
-                                    
+                            }
+                            0b100 => { //TODO: SameC
+                                fetch_next_byte!(bytes, byte1, byte2);
+                                increment_pc!(3,next_pc);
+                                instruction = Instruction::new(byte, Opcode::CALL)
+                                .add_operand(1, op1.add_cc(get_cc_operand(&components.x)))
+                                .add_operand(2, op2.add_addr_16bit(byte1, byte2).remove_addr_trait_from_addr());
+                            }
+                            0b101 => { 
+                                fetch_next_byte!(bytes, byte1, byte2);
+                                increment_pc!(3,next_pc);
+                                instruction = Instruction::new(byte, Opcode::CALL)
+                                .add_operand(1, op1.add_addr_16bit(byte1, byte2).remove_addr_trait_from_addr())
                             }
                             _ => set_nop!(instruction),
                         }
-                    },
-                    _ => set_nop!(instruction),
-                }
-                if(instruction.binary_value != 0x00){
-                    write!(writer, "Prev_PC: {:#06X?} | Next_PC {:#06X?} | Instruction: {}\n", prev_pc, next_pc, instruction);
-                    set_nop!(instruction);
-                }
+                        0b100|0b110 => {
+                            match components.y{
+                                0b000 => {
+                                    fetch_next_byte!(bytes, byte1);
+                                    increment_pc!(2,next_pc);
+                                    if(components.x == u8::from(0b100)) {
+                                        instruction = Instruction::new(byte, Opcode::LDH)
+                                        .add_operand(1, op1.add_addr_8bit(byte1))
+                                        .add_operand(2, op2.add_reg_8bit(Register8Bit::A));
+                                    }
+                                    else{
+                                        instruction = Instruction::new(byte, Opcode::LDH)
+                                        .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
+                                        .add_operand(2, op2.add_addr_8bit(byte1));
+                                    }
+                                }
+                                0b010 => {
+                                    increment_pc!(1,next_pc);
+                                    let (mut op1_reg, mut op2_reg): (Register8Bit, Register8Bit);
+                                    if(components.x == u8::from(0b100)) {
+                                        op1_reg = Register8Bit::C;
+                                        op2_reg = Register8Bit::A;
+                                    }
+                                    else{
+                                        op1_reg = Register8Bit::A;
+                                        op2_reg = Register8Bit::C;
+                                    }
+                                    instruction = Instruction::new(byte, Opcode::LD)
+                                    .add_operand(1, op1.add_reg_8bit_addr(op1_reg))
+                                    .add_operand(2, op2.add_reg_8bit(op2_reg));
+                                }
+                                _ => set_nop!(instruction),
+                            }
+                                
+                        }
+                        0b000|0b010 => {
+                            match components.y{
+                                0b010 => {
+                                    fetch_next_byte!(bytes, byte1, byte2);
+                                    increment_pc!(3,next_pc);
+                                    instruction = Instruction::new(byte, Opcode::JP)
+                                    .add_operand(1, op1.add_cc(get_cc_operand(&components.x)))
+                                    .add_operand(2, op2.add_addr_16bit(byte1, byte2));
+                                }
+                                0b100 => { //TODO: SameC
+                                    fetch_next_byte!(bytes, byte1, byte2);
+                                    increment_pc!(3,next_pc);
+                                    instruction = Instruction::new(byte, Opcode::CALL)
+                                    .add_operand(1, op1.add_cc(get_cc_operand(&components.x)))
+                                    .add_operand(2, op2.add_addr_16bit(byte1, byte2).remove_addr_trait_from_addr());
+                                }
+                                _ => set_nop!(instruction),
+                            }
+                        }
+                        _ => set_nop!(instruction),
+                    }
+                },
+                _ => set_nop!(instruction),
             }
+            if(instruction.binary_value != 0x00){
+                write!(writer, "Prev_PC: {:#06X?} | Next_PC {:#06X?} | Instruction: {}\n", prev_pc, next_pc, instruction);
+                set_nop!(instruction);
+            }
+        }
         Ok(())
     }
 }

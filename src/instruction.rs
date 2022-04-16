@@ -127,7 +127,9 @@ impl Operand{
         Operand { addr_8bit: Some(a8), is_addr: true, ..self } 
     }
 
-    pub fn add_addr_16bit(self, a16: u16) -> Self {
+    pub fn add_addr_16bit(self, a16_1: u8, a16_2: u8) -> Self {
+        let mut a16: u16;
+        a16 = (u16::from(a16_2) << 8) + (u16::from(a16_1));
         Operand { addr_16bit: Some(a16), is_addr: true, ..self } 
     }
 
@@ -149,6 +151,10 @@ impl Operand{
             (None, _) => Operand { is_addr: true, ..self }, 
             _ => self
         }
+    }
+
+    pub fn remove_addr_trait_from_addr(self) -> Self{
+        Operand { is_addr:false, ..self } 
     }
 
 }
