@@ -44,7 +44,9 @@ pub enum ConditionCode{
     Z,
     N,
     H,
-    C
+    C,
+    NZ,
+    NC,
 }
 
 impl RegFile {

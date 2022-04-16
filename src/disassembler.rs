@@ -7,6 +7,7 @@ use crate::instruction::Operand;
 
 use crate::cpu::Register8Bit;
 use crate::cpu::Register16Bit;
+use crate::cpu::ConditionCode;
 
 macro_rules! set_nop {
   ($instruction: expr) => {$instruction = Instruction::new(0x00, Opcode::NOP); }
@@ -20,6 +21,12 @@ macro_rules! fetch_next_byte{
     ($bytes: expr, $byte1: expr, $byte2: expr) => {
         $byte1 = *$bytes.next().unwrap();
         $byte2 = *$bytes.next().unwrap();
+    }
+}
+
+macro_rules! increment_pc {
+    ($num_bytes: expr, $pc: expr) => {
+        $pc += $num_bytes
     }
 }
 
@@ -37,18 +44,14 @@ impl Disassembler {
     }
 
     pub fn convert_to_asm(&self, writer: &mut impl Write) -> std::fmt::Result {
-        // let mut single_operand_to_process = false;
-        // let mut multiple_operands_to_process = 0;
-        // let mut prefix_operand_to_process = false;
-        // let mut asm_to_print = String::new();
-        // let mut immediate_value: u16 = 0;
-        // let mut process_3_bytes = true;
         let mut num_bytes = self.rom.len();
         let mut instruction = Instruction::new(0x00, Opcode::NOP);
         let (mut byte1, mut byte2): (u8, u8);
         let mut operand2: u8;
         let op1 = Operand::new();
         let op2 = Operand::new();
+        let mut prev_pc = 0 as u16; //pc is increment 1 after the instruction pc + r8 instructions are 2 bytes so we good??
+        let mut next_pc = 0 as u16;
         // for (bytes, byte) in contents.iter().enumerate {
 
         // bytes.nth(0); //nth 0 for consuming next, nth 1 for consuming next 2
@@ -59,6 +62,7 @@ impl Disassembler {
         //TODO: to merge Same<identifier>
         while let Some(byte) = bytes.next(){
             // write!(writer,"{:#04X?}\n", byte);
+            prev_pc = next_pc;
             let mut components = OpComponents::from_byte(byte);
             let mut byte = *byte;
                 match components.t {
@@ -66,19 +70,38 @@ impl Disassembler {
                         match components.x {
                             0b000|0b010|0b100|0b110 => {
                                 match components.y{
+                                    0b000 =>{
+                                        match components.x {
+                                            0b100|0b110 => {
+                                                fetch_next_byte!(bytes, byte1);
+                                                increment_pc!(2, next_pc);
+                                                instruction = Instruction::new(byte, Opcode::JR)
+                                                .add_operand(1, op1.add_cc(get_cc_operand(&components.x)))
+                                                .add_operand(2, op2.add_pc_rel_8bit(byte1 as i8));
+                                            },
+                                            _ => set_nop!(instruction),
+                                        }
+                                    }
                                     0b001 =>{
                                         fetch_next_byte!(bytes, byte1, byte2);
+                                        increment_pc!(3,next_pc);
                                         instruction = Instruction::new(byte, Opcode::LD)
                                         .add_operand(1, op1.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::SP)))
                                         .add_operand(2, op2.add_data_16bit_from_bytes(byte1, byte2));
                                     },
                                     0b010 =>{ 
+                                        increment_pc!(1,next_pc);
                                         instruction = Instruction::new(byte, Opcode::LD)
                                         .add_operand(1, op1.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::HL)).add_addr_trait())
-                                        .add_operand(2, op2.add_reg_8bit(Register8Bit::A));
+                                    } 
+                                    0b100 =>{ //TODO: SameB
+                                        increment_pc!(1,next_pc);
+                                        instruction = Instruction::new(byte, Opcode::INC)
+                                        .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
                                     }
                                     0b110 =>{ //TODO: SameA
                                         fetch_next_byte!(bytes, byte1);
+                                        increment_pc!(2,next_pc);
                                         instruction = Instruction::new(byte, Opcode::LD)
                                         .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
                                         .add_operand(2, op2.add_data_8bit(byte1));
@@ -89,12 +112,19 @@ impl Disassembler {
                             0b001|0b011|0b101|0b111 => {
                                 match components.y{
                                     0b010 =>{
+                                        increment_pc!(1,next_pc);
                                         instruction = Instruction::new(byte, Opcode::LD)
                                         .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
                                         .add_operand(2, op2.add_reg_16bit(get_16bit_reg_name(&components.z, RegType::HL)).add_addr_trait());
                                     },
-                                    0b111 =>{ //TODO: SameA
+                                    0b100 =>{ //TODO: SameB
+                                        increment_pc!(1,next_pc);
+                                        instruction = Instruction::new(byte, Opcode::INC)
+                                        .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
+                                    },
+                                    0b110 =>{ //TODO: SameA
                                         fetch_next_byte!(bytes, byte1);
+                                        increment_pc!(2,next_pc);
                                         instruction = Instruction::new(byte, Opcode::LD)
                                         .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
                                         .add_operand(2, op2.add_data_8bit(byte1));
@@ -102,20 +132,25 @@ impl Disassembler {
                                     _ => set_nop!(instruction),
                                 }
                             }
+                            
+
                             _ => set_nop!(instruction),
                         }
                     },
                     0b01 => {
                         if components.x == 6 && components.y == 6 { 
+                            increment_pc!(1,next_pc);
                             instruction = Instruction::new(byte, Opcode::HALT);
                         }
                         else { 
+                            increment_pc!(1,next_pc);
                             instruction = Instruction::new(byte, Opcode::LD)
                             .add_operand(1, op1.add_reg_8bit(get_8bit_reg_name(&components.x)).add_addr_trait())
                             .add_operand(2, op2.add_reg_8bit(get_8bit_reg_name(&components.y)).add_addr_trait());
                         }
                     },
                     0b10 => {  //Arithmetic
+                        increment_pc!(1,next_pc);
                         match components.x{
                             0b000 =>{
                                 instruction = Instruction::new(byte, Opcode::ADD)
@@ -159,6 +194,7 @@ impl Disassembler {
                             0b001 => match components.y {
                                 0b011 => { //PREFIX
                                     fetch_next_byte!(bytes, byte1);
+                                    increment_pc!(2,next_pc);
                                     let prefix_opcode = get_prefix_opcode(&byte1);
                                     components = OpComponents::from_byte(&byte1);
                                     match prefix_opcode {
@@ -176,215 +212,51 @@ impl Disassembler {
                                 }
                                 _ => set_nop!(instruction),
                             }
+                            0b100|110 => {
+                                match components.y{
+                                    0b000 => {
+                                        fetch_next_byte!(bytes, byte1);
+                                        increment_pc!(2,next_pc);
+                                        if(components.x == u8::from(0b100)) {
+                                            instruction = Instruction::new(byte, Opcode::LDH)
+                                            .add_operand(1, op1.add_addr_8bit(byte1))
+                                            .add_operand(2, op2.add_reg_8bit(Register8Bit::A));
+                                        }
+                                        else{
+                                            instruction = Instruction::new(byte, Opcode::LDH)
+                                            .add_operand(1, op1.add_reg_8bit(Register8Bit::A))
+                                            .add_operand(2, op2.add_addr_8bit(byte1));
+                                        }
+                                    }
+                                    0b010 => {
+                                        increment_pc!(1,next_pc);
+                                        let (mut op1_reg, mut op2_reg): (Register8Bit, Register8Bit);
+                                        if(components.x == u8::from(0b100)) {
+                                            op1_reg = Register8Bit::C;
+                                            op2_reg = Register8Bit::A;
+                                        }
+                                        else{
+                                            op1_reg = Register8Bit::A;
+                                            op2_reg = Register8Bit::C;
+                                        }
+                                        instruction = Instruction::new(byte, Opcode::LD)
+                                        .add_operand(1, op1.add_reg_8bit_addr(op1_reg))
+                                        .add_operand(2, op2.add_reg_8bit(op2_reg));
+                                    }
+                                    _ => set_nop!(instruction),
+                                }
+                                    
+                            }
                             _ => set_nop!(instruction),
                         }
                     },
                     _ => set_nop!(instruction),
                 }
                 if(instruction.binary_value != 0x00){
-                    write!(writer, "{}\n", instruction);
+                    write!(writer, "Prev_PC: {:#06X?} | Next_PC {:#06X?} | Instruction: {}\n", prev_pc, next_pc, instruction);
                     set_nop!(instruction);
                 }
             }
-        //     let components = OpComponents::from_byte(byte);
-        //     // write!(writer, "{:#04X?}\n", byte)?
-        //     if multiple_operands_to_process > 0 {
-        //         if multiple_operands_to_process == 2 {
-        //             immediate_value += u16::from(*byte);
-        //         } else if multiple_operands_to_process == 1 {
-        //             immediate_value += u16::from(*byte) << 8;
-        //             asm_to_print.push_str(&format!(" ${:#06X?}", immediate_value));
-        //             immediate_value = 0;
-        //             write!(writer, "{}\n", asm_to_print)?;
-        //             asm_to_print = String::from("");
-        //         }
-        //         multiple_operands_to_process -= 1;
-        //     } else if single_operand_to_process {
-        //         immediate_value += u16::from(*byte);
-        //         asm_to_print.push_str(&format!(" ${:#04X?}", immediate_value));
-        //         immediate_value = 0;
-        //         write!(writer, "{}\n", asm_to_print)?;
-        //         asm_to_print = String::from("");
-        //         single_operand_to_process = false;
-        //     } else if prefix_operand_to_process {
-        //         write!(writer, "{:#04X?} {} \n", byte, OpComponents::process_prefix(&byte))?;
-        //         prefix_operand_to_process = false;
-        //     } else {
-        //         match components.t {
-        //             0b00 => match components.x {
-        //                 //MISC
-        //                 0b000 | 0b010 | 0b100 | 0b110 => match components.y {
-        //                     0b001 => {
-        //                         asm_to_print = format!(
-        //                             "{:#04X?} : LD {},",
-        //                             byte,
-        //                             OpComponents::convert_byte_to_16bit_reg_name(
-        //                                 &components.z,
-        //                                 RegType::SP
-        //                             )
-        //                         );
-        //                         multiple_operands_to_process = 2;
-        //                     }
-        //                     0b010 => {
-        //                         //special loads HL-/HL+
-        //                         write!(
-        //                             writer,
-        //                             "{:#04X?} : LD ({}), A\n",
-        //                             byte,
-        //                             OpComponents::convert_byte_to_16bit_reg_name(
-        //                                 &components.z,
-        //                                 RegType::HL)
-        //                             )?
-        //                     }
-        //                     0b110 => {
-        //                         //merge?
-        //                         asm_to_print = format!(
-        //                             "{:#04X?} : LD {},",
-        //                             byte,
-        //                             OpComponents::convert_byte_to_8bit_reg_name(&components.x)
-        //                         );
-        //                         single_operand_to_process = true;
-        //                     }
-        //                     _ => (),
-        //                 },
-        //                 0b001 | 0b011 | 0b101 | 0b111 =>
-        //                 //same as above, how merge?
-        //                 {
-        //                     match components.y {
-        //                         0b110 => {
-        //                             asm_to_print = format!(
-        //                                 "{:#04X?} : LD {},",
-        //                                 byte,
-        //                                 OpComponents::convert_byte_to_8bit_reg_name(&components.x)
-        //                             );
-        //                             single_operand_to_process = true;
-        //                         }
-        //                         _ => (),
-        //                     }
-        //                 }
-        //                 _ => (),
-        //             },
-        //             0b01 => {
-        //                 //LDs and HALT
-        //                 if components.x == 6 && components.y == 6 {
-        //                     //HALT
-        //                     write!(writer, "{:#04X?} : HALT\n", byte)?
-        //                 } else {
-        //                     write!(
-        //                         writer,
-        //                         "{:#04X?} : LD {}, {} \n",
-        //                         byte,
-        //                         OpComponents::convert_byte_to_8bit_reg_name(&components.x),
-        //                         OpComponents::convert_byte_to_8bit_reg_name(&components.y)
-        //                     )?
-        //                 }
-        //             }
-        //             0b10 => {
-        //                 //Arithmetic, merge into more variable lol
-        //                 match components.x {
-        //                     0b000 => {
-        //                         match components.y {
-        //                             0b0000..=0b0111 => {
-        //                                 //Adds
-        //                                 write!(
-        //                                     writer,
-        //                                     "{:#04X?} : ADD A, {} \n",
-        //                                     byte,
-        //                                     OpComponents::convert_byte_to_8bit_reg_name(
-        //                                         &components.y
-        //                                     )
-        //                                 )?
-        //                             }
-        //                             _ => (),
-        //                         }
-        //                     }
-        //                     0b001 => {
-        //                         //TODO same as above minus ADC
-        //                         match components.y {
-        //                             0b0000..=0b0111 => {
-        //                                 //Adds
-        //                                 write!(
-        //                                     writer,
-        //                                     "{:#04X?} : ADC A, {} \n",
-        //                                     byte,
-        //                                     OpComponents::convert_byte_to_8bit_reg_name(
-        //                                         &components.y
-        //                                     )
-        //                                 )?
-        //                             }
-        //                             _ => (),
-        //                         }
-        //                     }
-        //                     0b010 => match components.y {
-        //                         0b0000..=0b0111 => write!(
-        //                             writer,
-        //                             "{:#04X?} : SUB {} \n",
-        //                             byte,
-        //                             OpComponents::convert_byte_to_8bit_reg_name(&components.y)
-        //                         )?,
-        //                         _ => (),
-        //                     },
-        //                     0b011 => match components.y {
-        //                         0b0000..=0b0111 => write!(
-        //                             writer,
-        //                             "{:#04X?} : SUB A, {} \n",
-        //                             byte,
-        //                             OpComponents::convert_byte_to_8bit_reg_name(&components.y)
-        //                         )?,
-        //                         _ => (),
-        //                     },
-        //                     0b100 => match components.y {
-        //                         0b0000..=0b0111 => write!(
-        //                             writer,
-        //                             "{:#04X?} : AND {} \n",
-        //                             byte,
-        //                             OpComponents::convert_byte_to_8bit_reg_name(&components.y)
-        //                         )?,
-        //                         _ => (),
-        //                     },
-        //                     0b101 => match components.y {
-        //                         0b0000..=0b0111 => write!(
-        //                             writer,
-        //                             "{:#04X?} : XOR {} \n",
-        //                             byte,
-        //                             OpComponents::convert_byte_to_8bit_reg_name(&components.y)
-        //                         )?,
-        //                         _ => (),
-        //                     },
-        //                     0b110 => match components.y {
-        //                         0b0000..=0b0111 => write!(
-        //                             writer,
-        //                             "{:#04X?} : OR {} \n",
-        //                             byte,
-        //                             OpComponents::convert_byte_to_8bit_reg_name(&components.y)
-        //                         )?,
-        //                         _ => (),
-        //                     },
-        //                     0b111 => match components.y {
-        //                         0b0000..=0b0111 => write!(
-        //                             writer,
-        //                             "{:#04X?} : CP {} \n",
-        //                             byte,
-        //                             OpComponents::convert_byte_to_8bit_reg_name(&components.y)
-        //                         )?,
-        //                         _ => (),
-        //                     },
-        //                     _ => (),
-        //                 }
-        //             }
-        //             0b11 => match components.x {
-        //                 0b001 => match components.y {
-        //                     0b011 => { //PREFIX
-        //                         prefix_operand_to_process = true;
-        //                     }
-        //                     _ => (),
-        //                 }
-        //                 _ => (),
-        //             }
-        //             _ => (), //write!(writer, "{:#04X?}, ", byte)?,
-        //         }
-            // }
-        // }
         Ok(())
     }
 }
@@ -440,6 +312,16 @@ fn get_16bit_reg_name(byte: &u8, reg_type: RegType) -> Register16Bit {
         (0b11, RegType::HL) => Register16Bit::HLm,
         (0b10, RegType::SP) => Register16Bit::HL,
         (0b11, RegType::SP) => Register16Bit::SP,
+        _ => panic!(),
+    }
+}
+
+fn get_cc_operand(byte: &u8) -> ConditionCode {
+    match byte {
+        0b000|0b100 => ConditionCode::NZ,
+        0b001|0b101 => ConditionCode::Z,
+        0b010|0b110 => ConditionCode::NC,
+        0b011|0b111 => ConditionCode::C,
         _ => panic!(),
     }
 }

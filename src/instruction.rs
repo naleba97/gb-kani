@@ -84,10 +84,10 @@ impl Operand{
             (_, Some(Register16Bit), ..) => format!("{:?}", self.register_16bit.unwrap()), 
             (_,_, Some(u8), ..) => format!("{:#04X?}", self.data_8bit.unwrap()),
             (_,_,_, Some(u8), ..) => format!("{:#06X?}", self.data_16bit.unwrap()),
-            (_,_,_,_, Some(u16), ..) => format!("{:?}", self.addr_8bit.unwrap()),
-            (_,_,_,_,_, Some(u16), ..) => format!("{:?}", self.addr_16bit.unwrap()),
+            (_,_,_,_, Some(u16), ..) => format!("{:#04X?}", self.addr_8bit.unwrap()),
+            (_,_,_,_,_, Some(u16), ..) => format!("{:#06X?}", self.addr_16bit.unwrap()),
             (_,_,_,_,_,_, Some(u8), ..) => format!("{:?}", self.prefix_num.unwrap()),
-            (_,_,_,_,_,_,_,Some(i8), _) => format!("{:?}", self.pc_relative_8bit.unwrap()),
+            (_,_,_,_,_,_,_,Some(i8), _) => format!("{:#04X?}", self.pc_relative_8bit.unwrap()),
             (.., Some(ConditionCode)) => format!("{:?}", self.condition_code.unwrap()),
             _ => format!(""),
         }
@@ -97,8 +97,16 @@ impl Operand{
         Operand { register_8bit: Some(reg_8bit), ..self } 
     }
 
+    pub fn add_reg_8bit_addr(self, reg_8bit: Register8Bit) -> Self {
+        Operand { register_8bit: Some(reg_8bit), is_addr: true, ..self } 
+    }
+
     pub fn add_reg_16bit(self, reg_16bit: Register16Bit) -> Self {
         Operand { register_16bit: Some(reg_16bit), ..self } 
+    }
+
+    pub fn add_reg_16bit_addr(self, reg_16bit: Register16Bit) -> Self {
+        Operand { register_16bit: Some(reg_16bit), is_addr: true, ..self } 
     }
 
     pub fn add_data_8bit(self, d8: u8) -> Self {
@@ -190,7 +198,7 @@ impl fmt::Display for Instruction{
 
         let mut op1_is_addr = &(self.operand1.unwrap().is_addr);
         let mut op2_is_addr = if (self.operand2.is_none()) {false} else {(self.operand2.unwrap().is_addr)};
-        
+
         match (&self.operand1, &self.operand2, op1_is_addr, op2_is_addr) {
             (None, None, ..) => (),
             (Some(Operand), None, true, _) => instruction_to_print.push_str(&format!(" ({})", self.operand1.as_ref().unwrap())),
@@ -198,12 +206,13 @@ impl fmt::Display for Instruction{
             (Some(Operand), _, true, false) => instruction_to_print.push_str(&format!(" ({}), {}", self.operand1.as_ref().unwrap(), self.operand2.as_ref().unwrap())),
             (Some(Operand), _, false, true) => instruction_to_print.push_str(&format!(" {}, ({})", self.operand1.as_ref().unwrap(), self.operand2.as_ref().unwrap())),
             (Some(Operand), _, false, false) => instruction_to_print.push_str(&format!(" {}, {}", self.operand1.as_ref().unwrap(), self.operand2.as_ref().unwrap())),
-            _ => ()
+            _ => panic!()
         }
 
         instruction_to_print = instruction_to_print.replace("HLm", "HL-");
         instruction_to_print = instruction_to_print.replace("HLp", "HL+");
         instruction_to_print = instruction_to_print.replace(", 0x", ", $");
+        instruction_to_print = instruction_to_print.replace("(0x", "($");
 
         write!(f, "{}", instruction_to_print)
     }
