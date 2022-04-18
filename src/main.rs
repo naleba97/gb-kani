@@ -32,9 +32,8 @@ fn main() -> Result<(), std::io::Error> {
     //uncomment below for single instruction debug
     // let op1 = Operand::new();
     // let op2 = Operand::new();
-    // let instruction = Instruction::new(0x69, Opcode::LDH)
-    // .add_operand(1, op1.add_addr_8bit(0x69))
-    // .add_operand(2, op2.add_reg_8bit(Register8Bit::A));
+    // let instruction = Instruction::new(0x10, Opcode::RST)
+    // .add_operand(1, op1.add_data_8bit(0x10).add_rst_trait());
     // println!("{}", instruction);
     
     let disas = Disassembler::new(contents);

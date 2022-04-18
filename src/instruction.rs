@@ -48,6 +48,10 @@ pub enum Opcode{
     HALT,
     CPL,
     CCF,
+    RETI,
+    EI,
+    DI,
+    LDHL,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -62,6 +66,7 @@ pub struct Operand{
    condition_code: Option<ConditionCode>,
    is_addr: bool,
    prefix_num: Option<u8>,
+   is_rst: bool,
 }
 
 impl Operand{
@@ -77,6 +82,7 @@ impl Operand{
             condition_code: None,
             is_addr: false,
             prefix_num: None,
+            is_rst: false,
         }
     }
     
@@ -84,7 +90,14 @@ impl Operand{
         match (&self.register_8bit, &self.register_16bit, &self.data_8bit, &self.data_16bit, &self.addr_8bit, &self.addr_16bit, &self.prefix_num, &self.pc_relative_8bit, &self.condition_code){
             (Some(Register8Bit), ..) => format!("{:?}", self.register_8bit.unwrap()), 
             (_, Some(Register16Bit), ..) => format!("{:?}", self.register_16bit.unwrap()), 
-            (_,_, Some(u8), ..) => format!("{:#04X?}", self.data_8bit.unwrap()),
+            (_,_, Some(u8), ..) => {
+                if(!self.is_rst){
+                    format!("{:#04X?}", self.data_8bit.unwrap())
+                }
+                else{
+                    format!("{}", self.get_rst_hex_offset())
+                }
+            },
             (_,_,_, Some(u8), ..) => format!("{:#06X?}", self.data_16bit.unwrap()),
             (_,_,_,_, Some(u16), ..) => format!("{:#04X?}", self.addr_8bit.unwrap()),
             (_,_,_,_,_, Some(u16), ..) => format!("{:#06X?}", self.addr_16bit.unwrap()),
@@ -95,6 +108,16 @@ impl Operand{
         }
     }
     
+    pub fn get_rst_hex_offset(self) -> String{
+        let mut rst_offset = 0 as u8;
+        let mut rst_offset_as_str :String;
+        rst_offset = (self.data_8bit.unwrap() << 3);
+        rst_offset_as_str = format!("{:#04X?}", rst_offset);
+        rst_offset_as_str = rst_offset_as_str.replace("0x", "");
+        rst_offset_as_str.push_str("H");
+        return rst_offset_as_str;
+    }
+
     pub fn add_reg_8bit(self, reg_8bit: Register8Bit) -> Self {
         Operand { register_8bit: Some(reg_8bit), ..self } 
     }
@@ -151,6 +174,13 @@ impl Operand{
         match (self.register_8bit, self.register_16bit){
             (Some(Register8Bit::HL), None) => Operand { is_addr: true, ..self }, 
             (None, _) => Operand { is_addr: true, ..self }, 
+            _ => self
+        }
+    }
+
+    pub fn add_rst_trait(self) -> Self{
+        match (self.data_8bit){
+            (Some(u8)) => Operand { is_rst: true, ..self }, 
             _ => self
         }
     }
